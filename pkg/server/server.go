@@ -33,6 +33,7 @@ import (
 	"github.com/spiffe/spire/services"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 )
 
 var (
@@ -213,6 +214,8 @@ func (server *Server) initEndpoints() error {
 		ServerCA:        server.dependencies.ServerCAImpl,
 		BaseSpiffeIDTTL: server.Config.BaseSpiffeIDTTL,
 		Logger:          server.Config.Log,
+		GetURINames:     uri.GetURINamesFromCertificate,
+		FromContext:     peer.FromContext,
 	})
 	nodeSvc = node.ServiceLoggingMiddleWare(server.Config.Log)(nodeSvc)
 	nodeEnpoints := getNodeEndpoints(nodeSvc)

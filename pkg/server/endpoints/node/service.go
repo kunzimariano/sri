@@ -2,13 +2,13 @@ package node
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 
 	"reflect"
 	"sort"
 
 	"github.com/sirupsen/logrus"
-	"github.com/spiffe/go-spiffe/uri"
 	pb "github.com/spiffe/spire/pkg/api/node"
 	"github.com/spiffe/spire/pkg/common"
 	"github.com/spiffe/spire/pkg/common/util"
@@ -36,6 +36,8 @@ type service struct {
 	baseSpiffeIDTTL int32
 	dataStore       datastore.DataStore
 	serverCA        ca.ControlPlaneCa
+	fromContext     peerFromContext
+	getURINames     getURINamesFromCertificate
 }
 
 //Config is a configuration struct to init the service
@@ -46,8 +48,14 @@ type Config struct {
 	CA              services.CA
 	DataStore       datastore.DataStore
 	ServerCA        ca.ControlPlaneCa
+	FromContext     peerFromContext
+	GetURINames     getURINamesFromCertificate
 	BaseSpiffeIDTTL int32
 }
+
+type peerFromContext func(ctx context.Context) (p *peer.Peer, ok bool)
+
+type getURINamesFromCertificate func(cert *x509.Certificate) (uris []string, err error)
 
 // NewService creates a node service with the necessary dependencies.
 func NewService(config Config) (s Service) {
@@ -60,6 +68,8 @@ func NewService(config Config) (s Service) {
 		baseSpiffeIDTTL: config.BaseSpiffeIDTTL,
 		dataStore:       config.DataStore,
 		serverCA:        config.ServerCA,
+		fromContext:     config.FromContext,
+		getURINames:     config.GetURINames,
 	}
 }
 
@@ -165,10 +175,10 @@ func (s *service) FetchBaseSVID(ctx context.Context, request pb.FetchBaseSVIDReq
 func (s *service) FetchSVID(ctx context.Context, request pb.FetchSVIDRequest) (response pb.FetchSVIDResponse, err error) {
 	//TODO: extract this from the caller cert
 	var baseSpiffeID string
-	ctxPeer, _ := peer.FromContext(ctx)
+	ctxPeer, _ := s.fromContext(ctx)
 	tlsInfo, ok := ctxPeer.AuthInfo.(credentials.TLSInfo)
 	if ok {
-		spiffeID, err := uri.GetURINamesFromCertificate(tlsInfo.State.PeerCertificates[0])
+		spiffeID, err := s.getURINames(tlsInfo.State.PeerCertificates[0])
 		if err != nil {
 			return response, err
 		}

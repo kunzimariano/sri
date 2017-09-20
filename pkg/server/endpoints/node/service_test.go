@@ -1,6 +1,9 @@
 package node
 
 import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -11,6 +14,8 @@ import (
 	"github.com/spiffe/spire/pkg/server/nodeattestor"
 	"github.com/spiffe/spire/services"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 )
 
 type NodeServiceTestSuite struct {
@@ -22,6 +27,22 @@ type NodeServiceTestSuite struct {
 	mockCA          *services.MockCA
 	mockIdentity    *services.MockIdentity
 	mockAttestation *services.MockAttestation
+}
+
+func fakeGetURINames(*x509.Certificate) ([]string, error) {
+	return []string{"spiffe://example.org/spiffe/node-id/token"}, nil
+}
+
+func fakeFromContext(context context.Context) (*peer.Peer, bool) {
+	state := tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{&x509.Certificate{}},
+	}
+
+	fakePeer := &peer.Peer{
+		Addr:     nil,
+		AuthInfo: credentials.TLSInfo{State: state},
+	}
+	return fakePeer, true
 }
 
 func (suite *NodeServiceTestSuite) SetupTest() {
@@ -41,6 +62,8 @@ func (suite *NodeServiceTestSuite) SetupTest() {
 		Identity:        suite.mockIdentity,
 		ServerCA:        suite.mockServerCA,
 		DataStore:       suite.mockDataStore,
+		FromContext:     fakeFromContext,
+		GetURINames:     fakeGetURINames,
 		BaseSpiffeIDTTL: 7777,
 	})
 }
